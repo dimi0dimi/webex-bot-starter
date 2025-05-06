@@ -8,6 +8,7 @@ var app = express();
 app.use(bodyParser.json());
 app.use(express.static("images"));
 
+const { spawn } = require('child_process');
 const config = {
   token: process.env.BOTTOKEN,
 };
@@ -99,6 +100,28 @@ framework.hears(
   "**framework**: (learn more about the Webex Bot Framework)",
   0
 );
+
+// Add a new event handler for the bot with regex "I would like.*"
+// Check how regex works: https://regex101.com/
+framework.hears(/I would like.*/i, (bot, trigger) => {
+  const { spawn } = require('child_process');
+  const pyProcess = spawn('python', [
+    'generate_response.py',
+    '--user_message', trigger.text
+  ]);
+
+  let pythonData = '';
+  pyProcess.stdout.on('data', (data) => {
+    pythonData += data.toString();
+  });
+  pyProcess.stdout.on('end', () => {
+    bot.say('markdown', pythonData);
+  });
+  pyProcess.stderr.on('data', (err) => {
+    console.error(`Python error: \${err}`);
+    bot.say('Something went wrong.');
+  });
+});
 
 /* On mention with command, using other trigger data, can use lite markdown formatting
 ex User enters @botname 'info' phrase, the bot will provide personal details
@@ -273,7 +296,12 @@ framework.hears(
     bot
       .say(`Hello ${trigger.person.displayName}.`)
       //    .then(() => sendHelp(bot))
-      .then(() => bot.say("markdown", framework.showHelp()))
+      .then(() => {
+        const helpMessage = framework.showHelp();
+        const extraMessage = "\n * **I would like**: (enter message to be processed by the AI)";
+        return bot.say("markdown", helpMessage + extraMessage);
+      })
+      // .then(() => bot.say("markdown", framework.showHelp()))
       .catch((e) => console.error(`Problem in help hander: ${e.message}`));
   },
   "**help**: (what you are reading now)",
